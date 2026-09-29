@@ -1,10 +1,14 @@
 import { Hono } from "hono";
+import { cors } from "hono/cors";
+import { logger } from "hono/logger";
 import user from "./routes/user";
 
 const app = new Hono();
 
-app.get("/health", (c) => c.json({ status: "ok" }));
+app.use("*", cors());
+app.use("*", logger());
 
+app.get("/health", (c) => c.json({ status: "ok" }));
 app.route("/user", user);
 
 export default app;
