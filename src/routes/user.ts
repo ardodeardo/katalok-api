@@ -1,5 +1,8 @@
 import { Hono } from "hono";
 
+import { zValidator } from "@hono/zod-validator";
+import * as z from "zod";
+
 const user = new Hono();
 
 type User = {
@@ -8,6 +11,9 @@ type User = {
   firstName: string;
   lastName: string;
   email: string;
+  createdAt: Date;
+  updatedAt: Date | null;
+  deletedAt: Date | null;
 };
 
 const users: Array<User> = [
@@ -17,24 +23,50 @@ const users: Array<User> = [
     firstName: "Auggie",
     lastName: "Salazaar",
     email: "auggie.salazaar@gmail.com",
+    createdAt: new Date(),
+    updatedAt: null,
+    deletedAt: null,
   },
 ];
 
-let nextId = 2;
+let nextId: number = 2;
+
+const existedUndeleted = (uuid: string) =>
+  users.find((user) => user.uuid === uuid && user.deletedAt === null);
+
+const emailTaken = (email: string, uuidException?: string) =>
+  users.some(
+    (user) =>
+      user.email === email &&
+      user.deletedAt === null &&
+      user.uuid !== uuidException,
+  );
+
+// take out id and deletedAt
+const publicResponse = (user: User) => ({
+  uuid: user.uuid,
+  firstName: user.firstName,
+  lastName: user.lastName,
+  email: user.email,
+  createdAt: user.createdAt,
+  updatedAt: user.updatedAt,
+});
 
 // GET /user
-user.get("/", (c) =>
-  c.json({
-    data: users,
-  }),
-);
+user.get("/", (c) => {
+  const activeUsers = users.filter((user) => user.deletedAt === null);
+
+  return c.json({
+    data: activeUsers.map(publicResponse),
+  });
+});
 
 // GET /user/:uuid
-user.get("/:uuid", (c) => {
-  const uuid = c.req.param("uuid");
+user.get("/:uuid", zValidator("param", z.object({ uuid: z.uuid() })), (c) => {
+  const { uuid } = c.req.valid("param");
 
-  const found = users.find((user) => user.uuid === uuid);
-
+  // check if user existed and not deleted
+  const found = existedUndeleted(uuid);
   if (!found) {
     return c.json(
       {
@@ -45,31 +77,102 @@ user.get("/:uuid", (c) => {
   }
 
   return c.json({
-    data: found,
+    data: publicResponse(found),
   });
 });
 
 // POST /user
-user.post("/", async (c) => {
-  const body = await c.req.json<Omit<User, "id" | "uuid">>();
+user.post(
+  "/",
+  zValidator(
+    "json",
+    z.object({
+      firstName: z.string().min(2).max(128),
+      lastName: z.string().max(128),
+      email: z.email(),
+    }),
+  ),
+  (c) => {
+    const body = c.req.valid("json");
 
-  const added = users.push({
-    id: nextId++,
-    uuid: Bun.randomUUIDv7(),
-    ...body,
-  });
+    // check if email is taken
+    const taken = emailTaken(body.email);
+    if (taken) {
+      return c.json({ message: "email already used" }, 409); // 409 - CONFLICT
+    }
 
-  return c.json(
-    {
-      data: added,
-    },
-    201,
-  );
-});
+    const newUser: User = {
+      ...body, // safe by using zod. it will strip unlisted key from schema
+      id: nextId++,
+      uuid: Bun.randomUUIDv7(),
+      createdAt: new Date(),
+      updatedAt: null,
+      deletedAt: null,
+    };
 
-// user.post("/", (c) => c.text("POST /"));
-// user.put("/", (c) => c.text("PUT /"));
-// user.delete("/", (c) => c.text("DELETE /"));
-// user.query("/", (c) => c.text("QUERY /"));
+    users.push(newUser);
+
+    return c.json(
+      {
+        data: publicResponse(newUser),
+      },
+      201,
+    );
+  },
+);
+
+// PUT /user/:uuid (full payload)
+user.put(
+  "/:uuid",
+  zValidator("param", z.object({ uuid: z.uuid() })),
+  zValidator(
+    "json",
+    z.object({
+      firstName: z.string().min(2).max(128),
+      lastName: z.string().max(128),
+      email: z.email(),
+    }),
+  ),
+  (c) => {
+    const { uuid } = c.req.valid("param");
+    const body = c.req.valid("json");
+
+    // check if user existed and not deleted
+    const found = existedUndeleted(uuid);
+    if (!found) {
+      return c.json({ message: "user not found" }, 404);
+    }
+
+    // check if email is taken in, but exclude current uuid
+    const taken = emailTaken(body.email, uuid);
+    if (taken) {
+      return c.json({ message: "email already used" }, 409); // 409 - CONFLICT
+    }
+
+    Object.assign(found, body);
+    found.updatedAt = new Date();
+
+    return c.json({ data: publicResponse(found) });
+  },
+);
+
+// DELETE /:uuid
+user.delete(
+  "/:uuid",
+  zValidator("param", z.object({ uuid: z.uuid() })),
+  (c) => {
+    const { uuid } = c.req.valid("param");
+
+    // check if user existed and not deleted
+    const found = existedUndeleted(uuid);
+    if (!found) {
+      return c.json({ message: "user not found" }, 404);
+    }
+
+    found.deletedAt = new Date();
+
+    return c.body(null, 204);
+  },
+);
 
 export default user;
