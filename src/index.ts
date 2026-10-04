@@ -3,8 +3,8 @@ import { cors } from "hono/cors";
 import { logger } from "hono/logger";
 import { HTTPException } from "hono/http-exception";
 
-// group
 import user from "./routes/user";
+import { pgErrorStatus } from "./constants/pg-error";
 
 const app = new Hono();
 
@@ -16,36 +16,42 @@ app.get("/health", (c) => c.json({ status: "ok" }));
 app.route("/user", user);
 
 app.onError((error, c) => {
-  if (error instanceof HTTPException) return error.getResponse();
+  if (error instanceof HTTPException) {
+    return error.getResponse();
+  }
+
+  console.error(process.env.NODE_ENV);
 
   // drizzle wrapped original error in .cause
-  const e = ((error as any)?.cause ?? error) as {
+  const err = ((error as any)?.cause ?? error) as {
     code?: string;
     constraint?: string;
     detail?: string;
     message?: string;
   };
 
-  if (typeof e.code === "string" && /^[0-9A-Z]{5}$/.test(e.code)) {
+  if (typeof err.code === "string" && /^[0-9A-Z]{5}$/.test(err.code)) {
     return c.json(
       {
         success: false,
-        message: e.message,
+        message: err.message,
         error: {
           name: "dbError",
           message: [
             {
-              path: [e.code, e.constraint].filter(Boolean).join(" -- "),
-              message: e.detail ?? e.message,
+              path: [[err.code, err.constraint].filter(Boolean).join(" -- ")],
+              message:
+                process.env.NODE_ENV === "production"
+                  ? err.message
+                  : err.detail,
             },
           ],
         },
       },
-      500,
+      pgErrorStatus(err.code),
     );
   }
 
-  console.error(error);
   return c.json({ success: false, message: "internal server error" }, 500);
 });
 
