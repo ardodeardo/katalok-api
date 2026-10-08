@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import app from "../index";
+import app from "../..";
 
 describe("GET /user", () => {
   it("should return 200 and a list of users", async () => {

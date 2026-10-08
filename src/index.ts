@@ -3,7 +3,7 @@ import { cors } from "hono/cors";
 import { logger } from "hono/logger";
 import { HTTPException } from "hono/http-exception";
 
-import user from "./routes/user";
+import user from "./modules/user/user.routes";
 import { pgErrorStatus } from "./constants/pg-error";
 
 const app = new Hono();
