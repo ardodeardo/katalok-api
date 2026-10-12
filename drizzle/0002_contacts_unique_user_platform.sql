@@ -1,0 +1,1 @@
+ALTER TABLE "contacts" ADD CONSTRAINT "contacts_user_platform_unique" UNIQUE("user_id","platform_id");

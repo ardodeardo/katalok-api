@@ -1,0 +1,1 @@
+ALTER TABLE "contacts" ALTER COLUMN "content" SET DEFAULT '';

@@ -1,14 +1,19 @@
 import { userRepository } from "./user.repository";
-import type { SearchUserInput } from "./user.schema";
+import type {
+  UserTablePayload,
+  CreateUserPayload,
+  UpdateUserPayload,
+  UpdateVisibilityPayload,
+} from "./user.schema";
 
 // internal helper
-const findConflicts = async (
+const findTaken = async (
   email: string,
   username: string,
   excludeUuid?: string,
 ) => {
   // handle duplicate fields
-  const existed = await userRepository.findDuplicates(
+  const existed = await userRepository.selectExisted(
     email,
     username,
     excludeUuid,
@@ -33,17 +38,30 @@ const findConflicts = async (
 };
 
 export const userService = {
-  getAllActiveUsers: async () => await userRepository.findAllActive(),
+  getAll: async () => {
+    const rows = await userRepository.get();
 
-  getActiveUserByUuid: async (uuid: string) =>
-    await userRepository.findActiveByUuid(uuid),
+    return rows.map((row) => {
+      return {
+        ...row,
+        contacts: row.contacts
+          .filter((c) => !c.platform.deletedAt)
+          .map((c) => ({
+            uuid: c.uuid,
+            platform: c.platform.name,
+            type: c.platform.type,
+            content: c.content,
+          })),
+      };
+    });
+  },
 
-  searchUsers: async (body: SearchUserInput) => {
+  getUsers: async (body: UserTablePayload) => {
     const { q, page, perPage } = body;
 
     const escaped = q?.replace(/[\\%_]/g, "\\$&");
 
-    const { rows, totalRow } = await userRepository.search({
+    const { rows, totalRow } = await userRepository.select({
       ...body,
       q: escaped,
     });
@@ -53,7 +71,19 @@ export const userService = {
     const nextPage: number | null = page < totalPage ? page + 1 : null;
 
     return {
-      data: rows,
+      data: rows.map((row) => {
+        return {
+          ...row,
+          contacts: row.contacts
+            .filter((c) => !c.platform.deletedAt)
+            .map((c) => ({
+              uuid: c.uuid,
+              platform: c.platform.name,
+              type: c.platform.type,
+              content: c.content,
+            })),
+        };
+      }),
       meta: {
         page,
         perPage,
@@ -65,13 +95,28 @@ export const userService = {
     };
   },
 
-  createUser: async (data: {
-    firstName: string;
-    lastName: string;
-    username: string;
-    email: string;
-  }) => {
-    const conflicts = await findConflicts(data.email, data.username);
+  readUser: async (uuid: string) => {
+    const row = await userRepository.selectByUuid(uuid);
+
+    if (!row) {
+      return null;
+    }
+
+    return {
+      ...row,
+      contacts: row?.contacts
+        .filter((c) => !c.platform.deletedAt)
+        .map((c) => ({
+          uuid: c.uuid,
+          platform: c.platform.name,
+          type: c.platform.type,
+          content: c.content,
+        })),
+    };
+  },
+
+  createUser: async (data: CreateUserPayload) => {
+    const conflicts = await findTaken(data.email, data.username);
 
     if (conflicts) {
       return { conflicts, user: null };
@@ -85,17 +130,9 @@ export const userService = {
     };
   },
 
-  updateUser: async (
-    uuid: string,
-    data: {
-      firstName: string;
-      lastName: string;
-      username: string;
-      email: string;
-    },
-  ) => {
+  updateUser: async (uuid: string, data: UpdateUserPayload) => {
     // check if the user existed at first
-    const existing = await userRepository.findActiveByUuid(uuid);
+    const existing = await userRepository.selectByUuid(uuid);
 
     if (!existing) {
       return {
@@ -106,7 +143,7 @@ export const userService = {
     }
 
     // check if the user data passed conflicted with exeptional uuid (self uuid)
-    const conflicts = await findConflicts(data.email, data.username, uuid);
+    const conflicts = await findTaken(data.email, data.username, uuid);
 
     if (conflicts) {
       return {
@@ -125,16 +162,12 @@ export const userService = {
     };
   },
 
+  updateCatalogVisibility: async (
+    uuid: string,
+    data: UpdateVisibilityPayload,
+  ) => await userRepository.updateVisibility(uuid, data),
+
   deleteUser: async (uuid: string) => {
-    // check if the user existed at first
-    const existing = await userRepository.findActiveByUuid(uuid);
-
-    if (!existing) {
-      return false;
-    }
-
-    await userRepository.softDelete(uuid);
-
-    return true;
+    return await userRepository.softDelete(uuid);
   },
 };

@@ -1,9 +1,5 @@
 import * as z from "zod";
 
-export const uuidParamSchema = z.object({
-  uuid: z.uuid(),
-});
-
 export const createUserSchema = z.object({
   firstName: z.string().min(2).max(64),
   lastName: z.string().max(64),
@@ -11,7 +7,27 @@ export const createUserSchema = z.object({
   email: z.email(),
 });
 
-export const searchUserSchema = z.object({
+export type CreateUserPayload = z.infer<typeof createUserSchema>;
+
+export const updateUserSchema = createUserSchema.extend({
+  contacts: z.array(
+    z.object({
+      uuid: z.uuid().optional(), // contact uuid,
+      platformUuid: z.uuid(),
+      content: z.string().min(2).max(128),
+    }),
+  ),
+});
+
+export type UpdateUserPayload = z.infer<typeof updateUserSchema>;
+
+export const updateVisibilitySchema = z.object({
+  privateCatalog: z.boolean(),
+});
+
+export type UpdateVisibilityPayload = z.infer<typeof updateVisibilitySchema>;
+
+export const getUsersSchema = z.object({
   q: z.string().trim().min(3).max(128).optional(),
   page: z.number().int().min(1).default(1),
   perPage: z.number().int().min(1).max(100).default(20),
@@ -19,4 +35,4 @@ export const searchUserSchema = z.object({
   orderBy: z.enum(["asc", "desc"]).default("desc"),
 });
 
-export type SearchUserInput = z.infer<typeof searchUserSchema>;
+export type UserTablePayload = z.infer<typeof getUsersSchema>;

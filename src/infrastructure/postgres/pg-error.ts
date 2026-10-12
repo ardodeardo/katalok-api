@@ -1,4 +1,3 @@
-// constants/pg-error.ts
 export const pgErrorStatus = (code: string) => {
   switch (code) {
     // conflict

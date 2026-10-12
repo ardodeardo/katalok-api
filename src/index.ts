@@ -4,23 +4,32 @@ import { logger } from "hono/logger";
 import { HTTPException } from "hono/http-exception";
 
 import user from "./modules/user/user.routes";
-import { pgErrorStatus } from "./constants/pg-error";
+import contact from "./modules/contact/contact.routes";
+import platform from "./modules/platform/platform.routes";
 
-const app = new Hono();
+import { pgErrorStatus } from "./infrastructure/postgres/pg-error";
+
+const app = new Hono().basePath("/v1");
 
 app.use("*", cors());
 app.use("*", logger());
 
 app.get("/health", (c) => c.json({ status: "ok" }));
 
+// -- modules
+
 app.route("/user", user);
+app.route("/contact", contact);
+app.route("/platform", platform);
+
+// -- error handler
 
 app.onError((error, c) => {
   if (error instanceof HTTPException) {
     return error.getResponse();
   }
 
-  console.error(process.env.NODE_ENV);
+  console.error(error);
 
   // drizzle wrapped original error in .cause
   const err = ((error as any)?.cause ?? error) as {

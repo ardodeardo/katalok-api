@@ -5,15 +5,29 @@
     {
       "idx": 0,
       "version": "7",
-      "when": 1790676277541,
-      "tag": "0000_freezing_ego",
+      "when": 1791513568813,
+      "tag": "0000_init",
       "breakpoints": true
     },
     {
       "idx": 1,
       "version": "7",
-      "when": 1790780253321,
-      "tag": "0001_cold_krista_starr",
+      "when": 1791773933807,
+      "tag": "0001_contacts_content_default",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1791779308673,
+      "tag": "0002_contacts_unique_user_platform",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1791779621894,
+      "tag": "0003_contacts_unique_index_user_platform",
       "breakpoints": true
     }
   ]

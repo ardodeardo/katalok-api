@@ -1,71 +1,35 @@
-import { db } from "../../db";
-import { users } from "../../db/schema";
-import {
-  isNull,
-  and,
-  eq,
-  ne,
-  or,
-  sql,
-  ilike,
-  asc,
-  desc,
-  count,
-} from "drizzle-orm";
-import type { SearchUserInput } from "./user.schema";
+import { isNull, and, eq, ne, or, sql, ilike, count } from "drizzle-orm";
 
-export const responseSchema = {
-  uuid: users.uuid,
-  firstName: users.firstName,
-  lastName: users.lastName,
-  username: users.username,
-  role: users.role,
-  email: users.email,
-  createdAt: users.createdAt,
-  updatedAt: users.updatedAt,
-};
+import type {
+  UserTablePayload,
+  CreateUserPayload,
+  UpdateUserPayload,
+  UpdateVisibilityPayload,
+} from "./user.schema";
+
+import { users } from "../../domain/user.domain";
+import { db } from "../../infrastructure/postgres/client";
+import { platforms } from "../../domain/platform.domain";
 
 export const userRepository = {
-  findAllActive: async () => {
-    return await db
-      .select(responseSchema)
-      .from(users)
-      .where(isNull(users.deletedAt));
+  get: async () => {
+    return await db.query.users.findMany({
+      columns: { id: false },
+      where: isNull(users.deletedAt),
+      orderBy: (u, { desc }) => desc(u.id),
+      with: {
+        contacts: {
+          columns: { uuid: true, content: true },
+          with: {
+            platform: { columns: { name: true, type: true, deletedAt: true } },
+          },
+          orderBy: (c, { asc }) => asc(c.id),
+        },
+      },
+    });
   },
 
-  findActiveByUuid: async (uuid: string) => {
-    const [found] = await db
-      .select(responseSchema)
-      .from(users)
-      .where(and(eq(users.uuid, uuid), isNull(users.deletedAt)));
-
-    return found;
-  },
-
-  findDuplicates: async (
-    email: string,
-    username: string,
-    excludeUuid?: string,
-  ) => {
-    return await db
-      .select({
-        id: users.id,
-        email: users.email,
-        username: users.username,
-      })
-      .from(users)
-      .where(
-        and(
-          excludeUuid ? ne(users.uuid, excludeUuid) : undefined,
-          or(eq(users.email, email), eq(users.username, username)),
-          isNull(users.deletedAt),
-        ),
-      );
-  },
-
-  search: async ({ q, page, perPage, sortBy, orderBy }: SearchUserInput) => {
-    const direction = orderBy === "asc" ? asc : desc;
-
+  select: async ({ q, page, perPage, sortBy, orderBy }: UserTablePayload) => {
     const where = and(
       isNull(users.deletedAt),
       q
@@ -79,55 +43,141 @@ export const userRepository = {
     );
 
     const [rows, [{ totalRow }]] = await Promise.all([
-      db
-        .select(responseSchema)
-        .from(users)
-        .where(where)
-        .orderBy(direction(users[sortBy]), desc(users.id)) // matched sortBy will always desc by id (newest one)
-        .limit(perPage)
-        .offset((page - 1) * perPage),
+      db.query.users.findMany({
+        columns: { id: false },
+        where: where,
+        limit: perPage,
+        offset: (page - 1) * perPage,
+        orderBy: (u, { asc, desc }) => {
+          const direction = orderBy === "asc" ? asc : desc;
+
+          return [direction(u[sortBy]), desc(u.id)]; // matched sortBy will always desc by id (newest one)
+        },
+        with: {
+          contacts: {
+            columns: { uuid: true, content: true },
+            with: {
+              platform: {
+                columns: { name: true, type: true, deletedAt: true },
+              },
+            },
+            orderBy: (c, { asc }) => asc(c.id),
+          },
+        },
+      }),
+
       db.select({ totalRow: count() }).from(users).where(where),
     ]);
 
     return { rows, totalRow };
   },
 
-  create: async (data: {
-    firstName: string;
-    lastName: string;
-    username: string;
-    email: string;
-  }) => {
-    const [created] = await db
-      .insert(users)
-      .values(data)
-      .returning(responseSchema);
+  selectByUuid: async (uuid: string) => {
+    return await db.query.users.findFirst({
+      columns: { id: false },
+      where: and(eq(users.uuid, uuid), isNull(users.deletedAt)),
+      with: {
+        contacts: {
+          columns: { uuid: true, content: true },
+          with: {
+            platform: { columns: { name: true, type: true, deletedAt: true } },
+          },
+          orderBy: (c, { asc }) => asc(c.id),
+        },
+      },
+    });
+  },
+
+  selectExisted: async (
+    email: string,
+    username: string,
+    excludeUuid?: string,
+  ) => {
+    return await db
+      .select({
+        id: users.id,
+        email: users.email, // needed, dont remove
+        username: users.username, // needed, dont remove
+      })
+      .from(users)
+      .where(
+        and(
+          excludeUuid ? ne(users.uuid, excludeUuid) : undefined,
+          or(eq(users.email, email), eq(users.username, username)),
+          isNull(users.deletedAt),
+        ),
+      );
+  },
+
+  create: async (data: CreateUserPayload) => {
+    const uuid = Bun.randomUUIDv7();
+
+    const [[created]] = await db.batch([
+      db
+        .insert(users)
+        .values({ ...data, uuid })
+        .returning({
+          uuid: users.uuid,
+          username: users.username,
+          createdAt: users.createdAt,
+        }),
+
+      db.execute(sql`
+        INSERT INTO contacts (user_id, platform_id)
+        SELECT ${users.id}, ${platforms.id}
+        FROM ${users}
+        CROSS JOIN ${platforms}
+        WHERE ${users.uuid} = ${uuid} AND ${platforms.deletedAt} IS NULL
+      `),
+    ]);
 
     return created;
   },
 
-  update: async (
-    uuid: string,
-    data: {
-      firstName: string;
-      lastName: string;
-      username: string;
-      email: string;
-    },
-  ) => {
+  update: async (uuid: string, data: UpdateUserPayload) => {
     const [updated] = await db
       .update(users)
       .set({ ...data, updatedAt: sql`NOW()` })
       .where(and(eq(users.uuid, uuid), isNull(users.deletedAt)))
-      .returning(responseSchema);
+      .returning({
+        uuid: users.uuid,
+        username: users.username,
+        updatedAt: users.updatedAt,
+      });
+
+    return updated;
+  },
+
+  updateVisibility: async (uuid: string, data: UpdateVisibilityPayload) => {
+    const [updated] = await db
+      .update(users)
+      .set({
+        privateCatalog: data.privateCatalog,
+        updatedAt: sql`NOW()`,
+      })
+      .where(and(eq(users.uuid, uuid), isNull(users.deletedAt)))
+      .returning({
+        uuid: users.uuid,
+        username: users.username,
+        privateCatalog: users.privateCatalog,
+        updatedAt: users.updatedAt,
+      });
 
     return updated;
   },
 
   softDelete: async (uuid: string) => {
-    await db
+    const [deleted] = await db
       .update(users)
       .set({ deletedAt: sql`NOW()` })
-      .where(eq(users.uuid, uuid));
+      .where(and(eq(users.uuid, uuid), isNull(users.deletedAt)))
+      .returning({
+        uuid: users.uuid,
+        username: users.username,
+        email: users.email,
+        deletedAt: users.deletedAt,
+      });
+
+    return deleted;
   },
 };
