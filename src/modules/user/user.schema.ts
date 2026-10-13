@@ -10,13 +10,14 @@ export const createUserSchema = z.object({
 export type CreateUserPayload = z.infer<typeof createUserSchema>;
 
 export const updateUserSchema = createUserSchema.extend({
-  contacts: z.array(
-    z.object({
-      uuid: z.uuid().optional(), // contact uuid,
-      platformUuid: z.uuid(),
-      content: z.string().min(2).max(128),
-    }),
-  ),
+  contacts: z
+    .array(
+      z.object({
+        uuid: z.uuid(),
+        content: z.string().trim().max(128),
+      }),
+    )
+    .max(2),
 });
 
 export type UpdateUserPayload = z.infer<typeof updateUserSchema>;

@@ -131,10 +131,12 @@ export const userService = {
   },
 
   updateUser: async (uuid: string, data: UpdateUserPayload) => {
-    // check if the user existed at first
-    const existing = await userRepository.selectByUuid(uuid);
+    const { contacts, ...fields } = data;
 
-    if (!existing) {
+    // check if the user existed and active at first
+    const { id } = await userRepository.getId(uuid);
+
+    if (!id) {
       return {
         notFound: true,
         conflicts: null,
@@ -153,7 +155,7 @@ export const userService = {
       };
     }
 
-    const user = await userRepository.update(uuid, data);
+    const user = await userRepository.update(uuid, id, fields, contacts);
 
     return {
       notFound: null,

@@ -8,8 +8,9 @@ import type {
 } from "./user.schema";
 
 import { users } from "../../domain/user.domain";
-import { db } from "../../infrastructure/postgres/client";
+import { contacts } from "../../domain/contact.domain";
 import { platforms } from "../../domain/platform.domain";
+import { db } from "../../infrastructure/postgres/client";
 
 export const userRepository = {
   get: async () => {
@@ -27,6 +28,15 @@ export const userRepository = {
         },
       },
     });
+  },
+
+  getId: async (uuid: string) => {
+    const [row] = await db
+      .select({ id: users.id })
+      .from(users)
+      .where(and(eq(users.uuid, uuid), isNull(users.deletedAt)));
+      
+    return row;
   },
 
   select: async ({ q, page, perPage, sortBy, orderBy }: UserTablePayload) => {
@@ -134,16 +144,33 @@ export const userRepository = {
     return created;
   },
 
-  update: async (uuid: string, data: UpdateUserPayload) => {
-    const [updated] = await db
-      .update(users)
-      .set({ ...data, updatedAt: sql`NOW()` })
-      .where(and(eq(users.uuid, uuid), isNull(users.deletedAt)))
-      .returning({
-        uuid: users.uuid,
-        username: users.username,
-        updatedAt: users.updatedAt,
-      });
+  update: async (
+    uuid: string,
+    userId: number,
+    baseUser: Omit<UpdateUserPayload, "contacts">,
+    contactList: UpdateUserPayload["contacts"],
+  ) => {
+    const [[updated]] = await db.batch([
+      db
+        .update(users)
+        .set({ ...baseUser, updatedAt: sql`NOW()` })
+        .where(and(eq(users.uuid, uuid), isNull(users.deletedAt)))
+        .returning({
+          uuid: users.uuid,
+          username: users.username,
+          updatedAt: users.updatedAt,
+        }),
+
+      ...contactList.map((c) =>
+        db
+          .update(contacts)
+          .set({
+            content: c.content,
+            updatedAt: sql`NOW()`,
+          })
+          .where(and(eq(contacts.uuid, c.uuid), eq(contacts.userId, userId))),
+      ),
+    ]);
 
     return updated;
   },
