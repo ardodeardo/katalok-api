@@ -29,6 +29,20 @@
       "when": 1791779621894,
       "tag": "0003_contacts_unique_index_user_platform",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1792126756873,
+      "tag": "0004_product_tags",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1792133682196,
+      "tag": "0005_product_images",
+      "breakpoints": true
     }
   ]
 }
