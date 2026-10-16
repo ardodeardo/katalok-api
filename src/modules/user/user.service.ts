@@ -1,4 +1,5 @@
 import { userRepository } from "./user.repository";
+
 import type {
   UserTablePayload,
   CreateUserPayload,
@@ -169,7 +170,5 @@ export const userService = {
     data: UpdateVisibilityPayload,
   ) => await userRepository.updateVisibility(uuid, data),
 
-  deleteUser: async (uuid: string) => {
-    return await userRepository.softDelete(uuid);
-  },
+  deleteUser: async (uuid: string) => await userRepository.softDelete(uuid),
 };
