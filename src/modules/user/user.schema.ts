@@ -36,4 +36,4 @@ export const getUsersSchema = z.object({
   orderBy: z.enum(["asc", "desc"]).default("desc"),
 });
 
-export type UserTablePayload = z.infer<typeof getUsersSchema>;
+export type UsersTablePayload = z.infer<typeof getUsersSchema>;

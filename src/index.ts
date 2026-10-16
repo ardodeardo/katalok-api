@@ -3,8 +3,10 @@ import { cors } from "hono/cors";
 import { logger } from "hono/logger";
 import { HTTPException } from "hono/http-exception";
 
+import tag from "./modules/tag/tag.routes";
 import user from "./modules/user/user.routes";
 import contact from "./modules/contact/contact.routes";
+import product from "./modules/product/product.routes";
 import platform from "./modules/platform/platform.routes";
 
 import { pgErrorStatus } from "./infrastructure/postgres/pg-error";
@@ -18,8 +20,10 @@ app.get("/health", (c) => c.json({ status: "ok" }));
 
 // -- modules
 
+app.route("/tag", tag);
 app.route("/user", user);
 app.route("/contact", contact);
+app.route("/product", product);
 app.route("/platform", platform);
 
 // -- error handler

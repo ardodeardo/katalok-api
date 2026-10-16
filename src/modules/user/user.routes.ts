@@ -5,8 +5,8 @@ import { zValidator } from "@hono/zod-validator";
 import { userService } from "./user.service";
 
 import {
-  createUserSchema,
   getUsersSchema,
+  createUserSchema,
   updateUserSchema,
   updateVisibilitySchema,
 } from "./user.schema";

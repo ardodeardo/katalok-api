@@ -1,7 +1,7 @@
 import { isNull, and, eq, ne, or, sql, ilike, count } from "drizzle-orm";
 
 import type {
-  UserTablePayload,
+  UsersTablePayload,
   CreateUserPayload,
   UpdateUserPayload,
   UpdateVisibilityPayload,
@@ -39,7 +39,7 @@ export const userRepository = {
     return row;
   },
 
-  select: async ({ q, page, perPage, sortBy, orderBy }: UserTablePayload) => {
+  select: async ({ q, page, perPage, sortBy, orderBy }: UsersTablePayload) => {
     const where = and(
       isNull(users.deletedAt),
       q

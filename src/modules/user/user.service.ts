@@ -1,7 +1,7 @@
 import { userRepository } from "./user.repository";
 
 import type {
-  UserTablePayload,
+  UsersTablePayload,
   CreateUserPayload,
   UpdateUserPayload,
   UpdateVisibilityPayload,
@@ -57,7 +57,7 @@ export const userService = {
     });
   },
 
-  getUsers: async (body: UserTablePayload) => {
+  getUsers: async (body: UsersTablePayload) => {
     const { q, page, perPage } = body;
 
     const escaped = q?.replace(/[\\%_]/g, "\\$&");
